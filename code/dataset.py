@@ -1,4 +1,3 @@
-
 from torch.utils.data import Dataset
 import numpy as np
 import os
@@ -9,12 +8,17 @@ import csv
 import torch
 from pathlib import Path
 import torchvision.transforms as transforms
+import pandas as pd
+
 
 def identity(x):
     return x
+
+
 def pad_to_patch_size(x, patch_size):
     assert x.ndim == 2
-    return np.pad(x, ((0,0),(0, patch_size-x.shape[1]%patch_size)), 'wrap')
+    return np.pad(x, ((0, 0), (0, patch_size - x.shape[1] % patch_size)), 'wrap')
+
 
 def pad_to_length(x, length):
     assert x.ndim == 3
@@ -22,12 +26,14 @@ def pad_to_length(x, length):
     if x.shape[-1] == length:
         return x
 
-    return np.pad(x, ((0,0),(0,0), (0, length - x.shape[-1])), 'wrap')
+    return np.pad(x, ((0, 0), (0, 0), (0, length - x.shape[-1])), 'wrap')
+
 
 def normalize(x, mean=None, std=None):
     mean = np.mean(x) if mean is None else mean
     std = np.std(x) if std is None else std
     return (x - mean) / (std * 1.0)
+
 
 def process_voxel_ts(v, p, t=8):
     '''
@@ -38,31 +44,33 @@ def process_voxel_ts(v, p, t=8):
 
     '''
     # average the time axis first
-    num_frames_per_window = t // 0.75 # ~0.75s per frame in HCP
+    num_frames_per_window = t // 0.75  # ~0.75s per frame in HCP
     v_split = np.array_split(v, len(v) // num_frames_per_window, axis=0)
-    v_split = np.concatenate([np.mean(f,axis=0).reshape(1,-1) for f in v_split],axis=0)
+    v_split = np.concatenate([np.mean(f, axis=0).reshape(1, -1) for f in v_split], axis=0)
     # pad the num_voxels
     # v_split = np.concatenate([v_split, np.zeros((v_split.shape[0], p - v_split.shape[1] % p))], axis=-1)
     v_split = pad_to_patch_size(v_split, p)
     v_split = normalize(v_split)
     return v_split
 
+
 def augmentation(data, aug_times=2, interpolation_ratio=0.5):
     '''
     data: num_samples, num_voxels_padded
     return: data_aug: num_samples*aug_times, num_voxels_padded
     '''
-    num_to_generate = int((aug_times-1)*len(data)) 
+    num_to_generate = int((aug_times - 1) * len(data))
     if num_to_generate == 0:
         return data
     pairs_idx = np.random.choice(len(data), size=(num_to_generate, 2), replace=True)
     data_aug = []
     for i in pairs_idx:
         z = interpolate_voxels(data[i[0]], data[i[1]], interpolation_ratio)
-        data_aug.append(np.expand_dims(z,axis=0))
+        data_aug.append(np.expand_dims(z, axis=0))
     data_aug = np.concatenate(data_aug, axis=0)
 
     return np.concatenate([data, data_aug], axis=0)
+
 
 def interpolate_voxels(x, y, ratio=0.5):
     ''''
@@ -71,51 +79,55 @@ def interpolate_voxels(x, y, ratio=0.5):
     return: z same shape as x and y
 
     '''
-    values = np.stack((x,y))
+    values = np.stack((x, y))
     points = (np.r_[0, 1], np.arange(len(x)))
-    xi = np.c_[np.full((len(x)), ratio), np.arange(len(x)).reshape(-1,1)]
+    xi = np.c_[np.full((len(x)), ratio), np.arange(len(x)).reshape(-1, 1)]
     z = interpolate.interpn(points, values, xi)
     return z
+
 
 def img_norm(img):
     if img.shape[-1] == 3:
         img = rearrange(img, 'h w c -> c h w')
     img = torch.tensor(img)
-    img = (img / 255.0) * 2.0 - 1.0 # to -1 ~ 1
+    img = (img / 255.0) * 2.0 - 1.0  # to -1 ~ 1
     return img
 
+
 def channel_first(img):
-        if img.shape[-1] == 3:
-            return rearrange(img, 'h w c -> c h w')
-        return img
+    if img.shape[-1] == 3:
+        return rearrange(img, 'h w c -> c h w')
+    return img
+
 
 class hcp_dataset(Dataset):
-    def __init__(self, path='../data/HCP/npz', roi='VC', patch_size=16, transform=identity, aug_times=2, 
-                num_sub_limit=None, include_kam=False, include_hcp=True):
+    def __init__(self, path='../data/HCP/npz', roi='VC', patch_size=16, transform=identity, aug_times=2,
+                 num_sub_limit=None, include_kam=False, include_hcp=True):
         super(hcp_dataset, self).__init__()
         data = []
         images = []
-        
+
         if include_hcp:
             for c, sub in enumerate(os.listdir(path)):
-                if os.path.isfile(os.path.join(path,sub,'HCP_visual_voxel.npz')) == False:
-                    continue 
+                if os.path.isfile(os.path.join(path, sub, 'HCP_visual_voxel.npz')) == False:
+                    continue
                 if num_sub_limit is not None and c > num_sub_limit:
                     break
-                npz = dict(np.load(os.path.join(path,sub,'HCP_visual_voxel.npz')))
-                voxels = np.concatenate([npz['V1'],npz['V2'],npz['V3'],npz['V4']], axis=-1) if roi == 'VC' else npz[roi] # 1200, num_voxels
-                voxels = process_voxel_ts(voxels, patch_size) # num_samples, num_voxels_padded
+                npz = dict(np.load(os.path.join(path, sub, 'HCP_visual_voxel.npz')))
+                voxels = np.concatenate([npz['V1'], npz['V2'], npz['V3'], npz['V4']], axis=-1) if roi == 'VC' else npz[
+                    roi]  # 1200, num_voxels
+                voxels = process_voxel_ts(voxels, patch_size)  # num_samples, num_voxels_padded
                 data.append(voxels)
-                
-            data = augmentation(np.concatenate(data, axis=0), aug_times) # num_samples, num_voxels_padded
-            data = np.expand_dims(data, axis=1) # num_samples, 1, num_voxels_padded
+
+            data = augmentation(np.concatenate(data, axis=0), aug_times)  # num_samples, num_voxels_padded
+            data = np.expand_dims(data, axis=1)  # num_samples, 1, num_voxels_padded
             images += [None] * len(data)
 
         if include_kam:
             kam_path = os.path.join(str(Path(path).parent.parent), 'Kamitani', 'npz')
             k = Kamitani_pretrain_dataset(kam_path, roi, patch_size, transform, aug_times)
             if len(data) != 0:
-                padding_len = max([data.shape[-1],  k.data.shape[-1]])
+                padding_len = max([data.shape[-1], k.data.shape[-1]])
                 data = pad_to_length(data, padding_len)
                 data_k = pad_to_length(k.data, padding_len)
                 data = np.concatenate([data, data_k], axis=0)
@@ -124,7 +136,7 @@ class hcp_dataset(Dataset):
             images += k.images
 
         assert len(data) != 0, 'No data found'
-        
+
         self.roi = roi
         self.patch_size = patch_size
         self.num_voxels = data.shape[-1]
@@ -132,14 +144,14 @@ class hcp_dataset(Dataset):
         self.transform = transform
         self.images = images
         self.images_transform = transforms.Compose([
-                                            img_norm,
-                                            transforms.Resize((112, 112)), 
-                                            channel_first
-                                        ])
+            img_norm,
+            transforms.Resize((112, 112)),
+            channel_first
+        ])
 
     def __len__(self):
         return len(self.data)
-    
+
     def __getitem__(self, index):
         img = self.images[index]
         images_transform = self.images_transform if img is not None else identity
@@ -147,7 +159,8 @@ class hcp_dataset(Dataset):
 
         return {'fmri': self.transform(self.data[index]),
                 'image': images_transform(img)}
-       
+
+
 class Kamitani_pretrain_dataset(Dataset):
     def __init__(self, path='../data/Kamitani/npz', roi='VC', patch_size=16, transform=identity, aug_times=2):
         super(Kamitani_pretrain_dataset, self).__init__()
@@ -156,7 +169,7 @@ class Kamitani_pretrain_dataset(Dataset):
         # self.images = [img for img in k1.image] + [None] * len(k2.fmri)
 
         data = k1.fmri
-        self.images = [(img*255.0).astype(np.uint8) for img in k1.image]
+        self.images = [(img * 255.0).astype(np.uint8) for img in k1.image]
 
         # data = augmentation(data, aug_times)
         self.data = np.expand_dims(data, axis=1)
@@ -164,14 +177,15 @@ class Kamitani_pretrain_dataset(Dataset):
         self.patch_size = patch_size
         self.num_voxels = data.shape[-1]
         self.transform = transform
-        
+
     def __len__(self):
         return len(self.data)
-    
+
     def __getitem__(self, index):
         return self.transform(self.data[index])
 
-def get_img_label(class_index:dict, img_filename:list, naive_label_set=None):
+
+def get_img_label(class_index: dict, img_filename: list, naive_label_set=None):
     img_label = []
     wind = []
     desc = []
@@ -193,9 +207,10 @@ def get_img_label(class_index:dict, img_filename:list, naive_label_set=None):
                 break
     return img_label, naive_label
 
-def create_Kamitani_dataset(path='../data/Kamitani/npz',  roi='VC', patch_size=16, fmri_transform=identity,
-            image_transform=identity, subjects = ['sbj_1', 'sbj_2', 'sbj_3', 'sbj_4', 'sbj_5'], 
-            test_category=None, include_nonavg_test=False):
+
+def create_Kamitani_dataset(path='../data/Kamitani/npz', roi='VC', patch_size=16, fmri_transform=identity,
+                            image_transform=identity, subjects=['sbj_1', 'sbj_2', 'sbj_3', 'sbj_4', 'sbj_5'],
+                            test_category=None, include_nonavg_test=False):
     img_npz = dict(np.load(os.path.join(path, 'images_256.npz')))
     with open(os.path.join(path, 'imagenet_class_index.json'), 'r') as f:
         img_class_index = json.load(f)
@@ -211,8 +226,8 @@ def create_Kamitani_dataset(path='../data/Kamitani/npz',  roi='VC', patch_size=1
     train_img_label, naive_label_set = get_img_label(img_class_index, img_training_filename)
     test_img_label, _ = get_img_label(img_class_index, img_testing_filename, naive_label_set)
 
-    test_img = [] # img_npz['test_images']
-    train_img = [] # img_npz['train_images']
+    test_img = []  # img_npz['test_images']
+    train_img = []  # img_npz['train_images']
     train_fmri = []
     test_fmri = []
     train_img_label_all = []
@@ -223,10 +238,10 @@ def create_Kamitani_dataset(path='../data/Kamitani/npz',  roi='VC', patch_size=1
         train_img.append(img_npz['train_images'][npz['arr_3']])
         train_lb = [train_img_label[i] for i in npz['arr_3']]
         test_lb = test_img_label
-        
+
         roi_mask = npz[roi]
-        tr = npz['arr_0'][..., roi_mask] # train
-        tt = npz['arr_2'][..., roi_mask] 
+        tr = npz['arr_0'][..., roi_mask]  # train
+        tt = npz['arr_2'][..., roi_mask]
         if include_nonavg_test:
             tt = np.concatenate([tt, npz['arr_1'][..., roi_mask]], axis=0)
 
@@ -237,25 +252,28 @@ def create_Kamitani_dataset(path='../data/Kamitani/npz',  roi='VC', patch_size=1
         train_fmri.append(tr)
         test_fmri.append(tt)
         if test_category is not None:
-            train_img_, train_fmri_, test_img_, test_fmri_, train_lb, test_lb = reorganize_train_test(train_img[-1], train_fmri[-1], 
-                                                            test_img[-1], test_fmri[-1], train_lb, test_lb,
-                                                            test_category, npz['arr_3'])
+            train_img_, train_fmri_, test_img_, test_fmri_, train_lb, test_lb = reorganize_train_test(train_img[-1],
+                                                                                                      train_fmri[-1],
+                                                                                                      test_img[-1],
+                                                                                                      test_fmri[-1],
+                                                                                                      train_lb, test_lb,
+                                                                                                      test_category,
+                                                                                                      npz['arr_3'])
             train_img[-1] = train_img_
             train_fmri[-1] = train_fmri_
             test_img[-1] = test_img_
             test_fmri[-1] = test_fmri_
-        
+
         train_img_label_all += train_lb
         test_img_label_all += test_lb
 
     len_max = max([i.shape[-1] for i in test_fmri])
-    test_fmri = [np.pad(i, ((0, 0),(0, len_max-i.shape[-1])), mode='wrap') for i in test_fmri]
-    train_fmri = [np.pad(i, ((0, 0),(0, len_max-i.shape[-1])), mode='wrap') for i in train_fmri]
+    test_fmri = [np.pad(i, ((0, 0), (0, len_max - i.shape[-1])), mode='wrap') for i in test_fmri]
+    train_fmri = [np.pad(i, ((0, 0), (0, len_max - i.shape[-1])), mode='wrap') for i in train_fmri]
 
     # len_min = min([i.shape[-1] for i in test_fmri])
     # test_fmri = [i[:,:len_min] for i in test_fmri]
     # train_fmri = [i[:,:len_min] for i in train_fmri]
-
 
     test_fmri = np.concatenate(test_fmri, axis=0)
     train_fmri = np.concatenate(train_fmri, axis=0)
@@ -267,14 +285,21 @@ def create_Kamitani_dataset(path='../data/Kamitani/npz',  roi='VC', patch_size=1
     # train_img = rearrange(train_img, 'n h w c -> n c h w')
 
     if isinstance(image_transform, list):
-        return (Kamitani_dataset(train_fmri, train_img, train_img_label_all, fmri_transform, image_transform[0], num_voxels, len(npz['arr_0'])), 
-                Kamitani_dataset(test_fmri, test_img, test_img_label_all, torch.FloatTensor, image_transform[1], num_voxels, len(npz['arr_2'])))
+        return (
+        Kamitani_dataset(train_fmri, train_img, train_img_label_all, fmri_transform, image_transform[0], num_voxels,
+                         len(npz['arr_0'])),
+        Kamitani_dataset(test_fmri, test_img, test_img_label_all, torch.FloatTensor, image_transform[1], num_voxels,
+                         len(npz['arr_2'])))
     else:
-        return (Kamitani_dataset(train_fmri, train_img, train_img_label_all, fmri_transform, image_transform, num_voxels, len(npz['arr_0'])), 
-                Kamitani_dataset(test_fmri, test_img, test_img_label_all, torch.FloatTensor, image_transform, num_voxels, len(npz['arr_2'])))
+        return (
+        Kamitani_dataset(train_fmri, train_img, train_img_label_all, fmri_transform, image_transform, num_voxels,
+                         len(npz['arr_0'])),
+        Kamitani_dataset(test_fmri, test_img, test_img_label_all, torch.FloatTensor, image_transform, num_voxels,
+                         len(npz['arr_2'])))
 
-def reorganize_train_test(train_img, train_fmri, test_img, test_fmri, train_lb, test_lb, 
-                    test_category, train_index_lookup):
+
+def reorganize_train_test(train_img, train_fmri, test_img, test_fmri, train_lb, test_lb,
+                          test_category, train_index_lookup):
     test_img_ = []
     test_fmri_ = []
     test_lb_ = []
@@ -287,7 +312,7 @@ def reorganize_train_test(train_img, train_fmri, test_img, test_fmri, train_lb, 
         test_fmri_.append(train_fmri[train_idx])
         test_lb_.append(train_lb[train_idx])
         train_idx_list.append(train_idx)
-    
+
     train_img_ = np.stack([img for i, img in enumerate(train_img) if i not in train_idx_list])
     train_fmri_ = np.stack([fmri for i, fmri in enumerate(train_fmri) if i not in train_idx_list])
     train_lb_ = [lb for i, lb in enumerate(train_lb) if i not in train_idx_list] + test_lb
@@ -299,8 +324,10 @@ def reorganize_train_test(train_img, train_fmri, test_img, test_fmri, train_lb, 
     test_fmri_ = np.stack(test_fmri_)
     return train_img_, train_fmri_, test_img_, test_fmri_, train_lb_, test_lb_
 
+
 class Kamitani_dataset(Dataset):
-    def __init__(self, fmri, image, img_label, fmri_transform=identity, image_transform=identity, num_voxels=0, num_per_sub=50):
+    def __init__(self, fmri, image, img_label, fmri_transform=identity, image_transform=identity, num_voxels=0,
+                 num_per_sub=50):
         super(Kamitani_dataset, self).__init__()
         self.fmri = fmri
         self.image = image
@@ -317,22 +344,23 @@ class Kamitani_dataset(Dataset):
 
     def __len__(self):
         return len(self.fmri)
-    
+
     def __getitem__(self, index):
         fmri = self.fmri[index]
         if index >= len(self.image):
             img = np.zeros_like(self.image[0])
         else:
             img = self.image[index] / 255.0
-        fmri = np.expand_dims(fmri, axis=0) # (1, num_voxels)
+        fmri = np.expand_dims(fmri, axis=0)  # (1, num_voxels)
         if self.return_image_class_info:
             img_class = self.img_class[index]
             img_class_name = self.img_class_name[index]
             naive_label = torch.tensor(self.naive_label[index])
             return {'fmri': self.fmri_transform(fmri), 'image': self.image_transform(img),
-                    'image_class': img_class, 'image_class_name': img_class_name, 'naive_label':naive_label}
+                    'image_class': img_class, 'image_class_name': img_class_name, 'naive_label': naive_label}
         else:
             return {'fmri': self.fmri_transform(fmri), 'image': self.image_transform(img)}
+
 
 class base_dataset(Dataset):
     def __init__(self, x, y=None, transform=identity):
@@ -340,14 +368,17 @@ class base_dataset(Dataset):
         self.x = x
         self.y = y
         self.transform = transform
+
     def __len__(self):
         return len(self.x)
+
     def __getitem__(self, index):
         if self.y is None:
             return self.transform(self.x[index])
         else:
             return self.transform(self.x[index]), self.transform(self.y[index])
-    
+
+
 def remove_repeats(fmri, img_lb):
     assert len(fmri) == len(img_lb), 'len error'
     fmri_dict = {}
@@ -362,6 +393,7 @@ def remove_repeats(fmri, img_lb):
         lbs.append(k)
         fmris.append(np.mean(np.stack(v), axis=0))
     return np.stack(fmris), lbs
+
 
 def get_stimuli_list(root, sub):
     sti_name = []
@@ -384,94 +416,165 @@ def get_stimuli_list(root, sub):
         sti_name_to_return.append(name)
     return sti_name_to_return
 
+
 def list_get_all_index(list, value):
     return [i for i, v in enumerate(list) if v == value]
-    
+
+
+def filter_json(j, dataset='coco'):
+    if dataset == 'coco':
+        images = pd.DataFrame.from_records(j['images'])
+        captions = pd.DataFrame.from_records(j['annotations'])
+        images = images.merge(captions, how='inner', left_on='id', right_on='image_id')
+
+        to_return = images[['file_name', 'caption']]
+        to_return.rename(columns={'file_name': 'filename'}, inplace=True)
+    else:
+        images = pd.DataFrame.from_records(j)
+        to_return = images[['filename', 'description']].loc[images['description'] != '']
+        to_return.rename(columns={'description': 'caption'}, inplace=True)
+
+    return to_return
+
+
+def get_all_desc(coco_path, imagenet_path):
+    with open(os.path.join(coco_path, 'captions_train2014.json'), 'rb') as f:
+        coco_train_json = json.load(f)
+    with open(os.path.join(coco_path, 'captions_val2014.json'), 'rb') as f:
+        coco_val_json = json.load(f)
+    with open(imagenet_path, 'rb') as f:
+        imagenet_json = json.load(f)
+
+    coco_train = filter_json(coco_train_json, 'coco')
+    coco_val = filter_json(coco_val_json, 'coco')
+    imagenet = filter_json(imagenet_json, 'imagenet')
+
+    return pd.concat([coco_train, coco_val, imagenet])
+
+
+def spread_dataset(fmri, images, captions):
+    assert len(fmri) == len(images) and len(fmri) == len(captions)
+
+    spreaded_fmri = []
+    spreaded_images = []
+    spreaded_captions = []
+    for idx, captions_group in enumerate(captions):
+        for caption in captions_group:
+            spreaded_fmri.append(fmri[idx])
+            spreaded_images.append(images[idx])
+            spreaded_captions.append(caption)
+
+    return spreaded_fmri, spreaded_images, spreaded_captions
+
+
 def create_BOLD5000_dataset(path='../data/BOLD5000', patch_size=16, fmri_transform=identity,
-            image_transform=identity, subjects = ['CSI1', 'CSI2', 'CSI3', 'CSI4'], include_nonavg_test=False):
+                            image_transform=identity, subjects=['CSI1', 'CSI2', 'CSI3', 'CSI4'],
+                            include_nonavg_test=False):
     roi_list = ['EarlyVis', 'LOC', 'OPA', 'PPA', 'RSC']
     fmri_path = os.path.join(path, 'BOLD5000_GLMsingle_ROI_betas/py')
-    desc_path = os.path.join(path, )
+    cap_coco_path = os.path.join(path, r"COCO-captions\annotations")
+    cap_imagenet_path = os.path.join(path, r"ImageNet-captions\imagenet_captions.json")
     img_path = os.path.join(path, 'BOLD5000_Stimuli')
-    imgs_dict = np.load(os.path.join(img_path, 'Scene_Stimuli/Presented_Stimuli/img_dict.npy'),allow_pickle=True).item()
+    imgs_dict = np.load(os.path.join(img_path, 'Scene_Stimuli/Presented_Stimuli/img_dict.npy'),
+                        allow_pickle=True).item()
     repeated_imgs_list = np.loadtxt(os.path.join(img_path, 'Scene_Stimuli', 'repeated_stimuli_113_list.txt'), dtype=str)
+    description_df = get_all_desc(cap_coco_path, cap_imagenet_path)
 
     fmri_files = [f for f in os.listdir(fmri_path) if f.endswith('.npy')]
     fmri_files.sort()
-    
+
     fmri_train_major = []
     fmri_test_major = []
-    desc_train_major = []
-    desc_test_major = []
+    cap_train_major = []
+    cap_test_major = []
     img_train_major = []
     img_test_major = []
+
     for sub in subjects:
+        print(f"Loading subject {sub}")
         # load fmri
         fmri_data_sub = []
         for roi in roi_list:
             for npy in fmri_files:
                 if npy.endswith('.npy') and sub in npy and roi in npy:
                     fmri_data_sub.append(np.load(os.path.join(fmri_path, npy)))
-        fmri_data_sub = np.concatenate(fmri_data_sub, axis=-1) # concatenate all rois
+        fmri_data_sub = np.concatenate(fmri_data_sub, axis=-1)  # concatenate all rois
         fmri_data_sub = normalize(pad_to_patch_size(fmri_data_sub, patch_size))
-      
+
         # load image
         img_files = get_stimuli_list(img_path, sub)
         img_data_sub = [imgs_dict[name] for name in img_files]
-        
+        caption_data_sub = [description_df['caption'].loc[description_df['filename'] == name].to_numpy() for name in
+                            img_files]
+
+        print("Creating test")
         # split train test
         test_idx = [list_get_all_index(img_files, img) for img in repeated_imgs_list]
-        test_idx = [i for i in test_idx if len(i) > 0] # remove empy list for CSI4
+        test_idx = [i for i in test_idx if len(i) > 0]  # remove empy list for CSI4
         test_fmri = np.stack([fmri_data_sub[idx].mean(axis=0) for idx in test_idx])
         test_img = np.stack([img_data_sub[idx[0]] for idx in test_idx])
-        
+        test_caption = [caption_data_sub[idx[0]] for idx in test_idx]
+
         test_idx_flatten = []
         for idx in test_idx:
-            test_idx_flatten += idx # flatten
+            test_idx_flatten += idx  # flatten
         if include_nonavg_test:
             test_fmri = np.concatenate([test_fmri, fmri_data_sub[test_idx_flatten]], axis=0)
             test_img = np.concatenate([test_img, np.stack([img_data_sub[idx] for idx in test_idx_flatten])], axis=0)
 
+        print("Creating train")
         train_idx = [i for i in range(len(img_files)) if i not in test_idx_flatten]
         train_img = np.stack([img_data_sub[idx] for idx in train_idx])
         train_fmri = fmri_data_sub[train_idx]
+        train_caption = [caption_data_sub[idx] for idx in train_idx]
 
         fmri_train_major.append(train_fmri)
         fmri_test_major.append(test_fmri)
         img_train_major.append(train_img)
         img_test_major.append(test_img)
+        cap_train_major.append(train_caption)
+        cap_test_major.append(test_caption)
+
     fmri_train_major = np.concatenate(fmri_train_major, axis=0)
     fmri_test_major = np.concatenate(fmri_test_major, axis=0)
     img_train_major = np.concatenate(img_train_major, axis=0)
     img_test_major = np.concatenate(img_test_major, axis=0)
+    cap_train_major = np.concatenate(cap_train_major, axis=0)
+    cap_test_major = np.concatenate(cap_test_major, axis=0)
 
+    print("Creating Datasets")
     num_voxels = fmri_train_major.shape[-1]
     if isinstance(image_transform, list):
-        return (BOLD5000_dataset(fmri_train_major, img_train_major, fmri_transform, image_transform[0], num_voxels), 
-                BOLD5000_dataset(fmri_test_major, img_test_major, torch.FloatTensor, image_transform[1], num_voxels))
+        return (BOLD5000_dataset(fmri_train_major, cap_train_major, img_train_major, fmri_transform, image_transform[0],
+                                 num_voxels),
+                BOLD5000_dataset(fmri_test_major, cap_test_major, img_test_major, torch.FloatTensor, image_transform[1],
+                                 num_voxels))
     else:
-        return (BOLD5000_dataset(fmri_train_major, img_train_major, fmri_transform, image_transform, num_voxels), 
-                BOLD5000_dataset(fmri_test_major, img_test_major, torch.FloatTensor, image_transform, num_voxels))
+        return (BOLD5000_dataset(fmri_train_major, cap_train_major, img_train_major, fmri_transform, image_transform,
+                                 num_voxels),
+                BOLD5000_dataset(fmri_test_major, cap_test_major, img_test_major, torch.FloatTensor, image_transform,
+                                 num_voxels))
+
 
 class BOLD5000_dataset(Dataset):
-    def __init__(self, fmri, description, image, fmri_transform=identity, image_transform=identity, num_voxels=0):
+    def __init__(self, fmri, caption, image, fmri_transform=identity, image_transform=identity, num_voxels=0):
         self.fmri = fmri
-        self.description = description
+        self.caption = caption
         self.image = image
         self.fmri_transform = fmri_transform
         self.image_transform = image_transform
         self.num_voxels = num_voxels
-    
+
     def __len__(self):
         return len(self.fmri)
-    
+
     def __getitem__(self, index):
         fmri = self.fmri[index]
         img = self.image[index] / 255.0
-        description = self.description[index]
-        fmri = np.expand_dims(fmri, axis=0) 
-        return {'fmri': self.fmri_transform(fmri),'description': description , 'image': self.image_transform(img)}
-    
+        caption = self.caption[index]
+        fmri = np.expand_dims(fmri, axis=0)
+        return {'fmri': self.fmri_transform(fmri), 'caption': caption, 'image': self.image_transform(img)}
+
     def switch_sub_view(self, sub, subs):
         # Not implemented
         pass
