@@ -1,3 +1,9 @@
+# Brain-Cap Project
+data/
+*.pth
+code/Mind_Vis_utils/dc_ldm/pretrains/
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -391,6 +391,7 @@ def create_BOLD5000_dataset(path='../data/BOLD5000', patch_size=16, fmri_transfo
             image_transform=identity, subjects = ['CSI1', 'CSI2', 'CSI3', 'CSI4'], include_nonavg_test=False):
     roi_list = ['EarlyVis', 'LOC', 'OPA', 'PPA', 'RSC']
     fmri_path = os.path.join(path, 'BOLD5000_GLMsingle_ROI_betas/py')
+    desc_path = os.path.join(path, )
     img_path = os.path.join(path, 'BOLD5000_Stimuli')
     imgs_dict = np.load(os.path.join(img_path, 'Scene_Stimuli/Presented_Stimuli/img_dict.npy'),allow_pickle=True).item()
     repeated_imgs_list = np.loadtxt(os.path.join(img_path, 'Scene_Stimuli', 'repeated_stimuli_113_list.txt'), dtype=str)
@@ -400,6 +401,8 @@ def create_BOLD5000_dataset(path='../data/BOLD5000', patch_size=16, fmri_transfo
     
     fmri_train_major = []
     fmri_test_major = []
+    desc_train_major = []
+    desc_test_major = []
     img_train_major = []
     img_test_major = []
     for sub in subjects:
@@ -451,8 +454,9 @@ def create_BOLD5000_dataset(path='../data/BOLD5000', patch_size=16, fmri_transfo
                 BOLD5000_dataset(fmri_test_major, img_test_major, torch.FloatTensor, image_transform, num_voxels))
 
 class BOLD5000_dataset(Dataset):
-    def __init__(self, fmri, image, fmri_transform=identity, image_transform=identity, num_voxels=0):
+    def __init__(self, fmri, description, image, fmri_transform=identity, image_transform=identity, num_voxels=0):
         self.fmri = fmri
+        self.description = description
         self.image = image
         self.fmri_transform = fmri_transform
         self.image_transform = image_transform
@@ -464,8 +468,9 @@ class BOLD5000_dataset(Dataset):
     def __getitem__(self, index):
         fmri = self.fmri[index]
         img = self.image[index] / 255.0
+        description = self.description[index]
         fmri = np.expand_dims(fmri, axis=0) 
-        return {'fmri': self.fmri_transform(fmri), 'image': self.image_transform(img)}
+        return {'fmri': self.fmri_transform(fmri),'description': description , 'image': self.image_transform(img)}
     
     def switch_sub_view(self, sub, subs):
         # Not implemented
