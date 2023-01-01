@@ -464,9 +464,9 @@ def spread_dataset(fmri, images, captions):
             spreaded_images.append(images[idx])
             spreaded_captions.append(caption)
 
-    return spreaded_fmri, spreaded_images, spreaded_captions
+    return np.array(spreaded_fmri), np.array(spreaded_images), np.array(spreaded_captions)
 
-
+# subjects=['CSI1', 'CSI2', 'CSI3', 'CSI4']
 def create_BOLD5000_dataset(path='../data/BOLD5000', patch_size=16, fmri_transform=identity,
                             image_transform=identity, subjects=['CSI1', 'CSI2', 'CSI3', 'CSI4'],
                             include_nonavg_test=False):
@@ -535,12 +535,20 @@ def create_BOLD5000_dataset(path='../data/BOLD5000', patch_size=16, fmri_transfo
         cap_train_major.append(train_caption)
         cap_test_major.append(test_caption)
 
+    len_max = max(fmri.shape[-1] for fmri in fmri_test_major)
+    fmri_train_major = [np.pad(i, ((0, 0), (0, len_max - i.shape[-1])), mode='wrap') for i in fmri_train_major]
+    fmri_test_major = [np.pad(i, ((0, 0), (0, len_max - i.shape[-1])), mode='wrap') for i in fmri_test_major]
+
     fmri_train_major = np.concatenate(fmri_train_major, axis=0)
     fmri_test_major = np.concatenate(fmri_test_major, axis=0)
     img_train_major = np.concatenate(img_train_major, axis=0)
     img_test_major = np.concatenate(img_test_major, axis=0)
     cap_train_major = np.concatenate(cap_train_major, axis=0)
     cap_test_major = np.concatenate(cap_test_major, axis=0)
+
+    fmri_train_major, img_train_major, cap_train_major = spread_dataset(fmri_train_major, img_train_major, cap_train_major)
+    fmri_test_major, img_test_major, cap_test_major = spread_dataset(fmri_test_major, img_test_major,
+                                                                        cap_test_major)
 
     print("Creating Datasets")
     num_voxels = fmri_train_major.shape[-1]
@@ -578,3 +586,5 @@ class BOLD5000_dataset(Dataset):
     def switch_sub_view(self, sub, subs):
         # Not implemented
         pass
+
+#train, test = create_BOLD5000_dataset(subjects=['CSI1', 'CSI2'])
