@@ -383,6 +383,7 @@ class fmri_encoder(nn.Module):
         return latent # N, n_seq, embed_dim
     
     def load_checkpoint(self, state_dict):
+        sd = state_dict
         if self.global_pool:
             state_dict = {k: v for k, v in state_dict.items() if ('mask_token' not in k and 'norm' not in k)}
         else:
@@ -390,6 +391,6 @@ class fmri_encoder(nn.Module):
         ut.interpolate_pos_embed(self, state_dict)
             
         m, u = self.load_state_dict(state_dict, strict=False)
-        print('missing keys:', u)
-        print('unexpected keys:', m)
-        return 
+        print('missing keys:', m)
+        print('unexpected keys:', u)
+        return sd
