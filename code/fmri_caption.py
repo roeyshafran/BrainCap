@@ -75,23 +75,26 @@ class GPTCaptionModel(nn.Module):
 
     @torch.no_grad()
     def generate_caption(self, fmri_prefix):
-        # Project fmri encoder embedding to GPT latent space
-        gpt_embedding = self.embedding_space_projection(fmri_prefix)
-        gpt_embedding = gpt_embedding.view(-1, self.prefix_length, self.gpt_embedding_size)
+        generated_text_list = []
+        for prefix in fmri_prefix:
+            # Project fmri encoder embedding to GPT latent space
+            gpt_embedding = self.embedding_space_projection(prefix)
+            gpt_embedding = gpt_embedding.view(-1, self.prefix_length, self.gpt_embedding_size)
 
-        tokens = torch.tensor([])
-        for i in range(MAX_CAPTION_LEN):
-            next_token, next_token_embed = self._gpt_next_token(gpt_embedding)
-            tokens = torch.cat((tokens, next_token), dim=1)
-            gpt_embedding = torch.cat((gpt_embedding, next_token_embed), dim=1)
+            tokens = torch.tensor([])
+            for i in range(MAX_CAPTION_LEN):
+                next_token, next_token_embed = self._gpt_next_token(gpt_embedding)
+                tokens = torch.cat((tokens, next_token), dim=1)
+                gpt_embedding = torch.cat((gpt_embedding, next_token_embed), dim=1)
 
-            if self._stop_token_index == next_token.item():
-                break
+                if self._stop_token_index == next_token.item():
+                    break
 
-        output_list = list(tokens.squeeze().cpu().numpy())
-        output_text = self.tokenizer.decode(output_list)
+            output_list = list(tokens.squeeze().cpu().numpy())
+            output_text = self.tokenizer.decode(output_list)
+            generated_text_list.append(output_text)
 
-        return output_text, output_list
+        return generated_text_list
 
     def parameters(self, recurse: bool = True):
         return self.embedding_space_projection.parameters()
@@ -117,7 +120,8 @@ def create_fmri_encoder_from_pretrained(path_pretrain_mbm_metafile, num_voxels, 
 
     return model
 
-
+# Taken from:
+# https://sachinruk.github.io/blog/pytorch/huggingface/2021/12/28/vit-to-gpt2-encoder-decoder-model.html#Training-Module-(PyTorch-Lightning)
 def top_k_top_p_filtering(
         next_token_logits: torch.FloatTensor,
         top_k = None,
