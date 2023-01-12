@@ -64,17 +64,17 @@ class GPTCaptionModel(nn.Module):
         return self.gpt(inputs_embeds=embedding_cat, attention_mask=mask_cat)
 
     # TODO: Check if attention_mask and/or labels parameters for GPT2LMHeadModel.forward are needed
-    def _gpt_next_token(self, embedding):
+    def _gpt_next_token(self, embedding, device):
         gpt_output = self.gpt(inputs_embeds=embedding)
         next_token_logits = gpt_output['logits'][:, -1, :]
         # TODO: Add device argument
-        filtered_p = top_k_top_p_filtering(next_token_logits, top_k=TOP_K, top_p=TOP_P)
+        filtered_p = top_k_top_p_filtering(next_token_logits, top_k=TOP_K, top_p=TOP_P, device=device)
         next_token = torch.multinomial(filtered_p, num_samples=1)
         next_token_embed = self.gpt.transformer.wte(next_token)
         return next_token, next_token_embed
 
     @torch.no_grad()
-    def generate_caption(self, fmri_prefix):
+    def generate_caption(self, fmri_prefix, device):
         generated_text_list = []
         for prefix in fmri_prefix:
             # Project fmri encoder embedding to GPT latent space
@@ -83,8 +83,10 @@ class GPTCaptionModel(nn.Module):
 
             tokens = torch.tensor([])
             for i in range(MAX_CAPTION_LEN):
-                next_token, next_token_embed = self._gpt_next_token(gpt_embedding)
+                next_token, next_token_embed = self._gpt_next_token(gpt_embedding, device)
+                next_token, next_token_embed, tokens = next_token.to(device), next_token_embed.to(device), tokens.to(device)
                 tokens = torch.cat((tokens, next_token), dim=1)
+                gpt_embedding = gpt_embedding.to(device)
                 gpt_embedding = torch.cat((gpt_embedding, next_token_embed), dim=1)
 
                 if self._stop_token_index == next_token.item():
@@ -110,7 +112,7 @@ class GPTCaptionModel(nn.Module):
 #class
 
 # TODO: Check what is the best way to use torch.load map_location parameter
-def create_fmri_encoder_from_pretrained(path_pretrain_mbm_metafile, num_voxels, global_pool=False):
+def create_fmri_encoder_from_pretrained(path_pretrain_mbm_metafile, num_voxels, global_pool=False, feature_extraction=True):
     pretrain_mbm_metafile = torch.load(path_pretrain_mbm_metafile, map_location='cpu')
     pretrain_mbm_metafile = pretrain_mbm_metafile['metafile']
 
@@ -118,6 +120,8 @@ def create_fmri_encoder_from_pretrained(path_pretrain_mbm_metafile, num_voxels, 
     model = mindvis_create_model_from_config(pretrain_mbm_metafile['config'], num_voxels, global_pool)
     model.load_checkpoint(pretrain_mbm_metafile['model'])
 
+    set_parameter_requires_grad(model, feature_extraction=feature_extraction)
+    
     return model
 
 # Taken from:
@@ -142,6 +146,11 @@ def top_k_top_p_filtering(
 
     return final_p
 
+def set_parameter_requires_grad(model, feature_extraction=True):
+  if feature_extraction:
+    model.requires_grad_(False)
+  else:
+    model.requires_grad_(True)
 
 def main():
     path_encoder = r"C:\Users\roeys\OneDrive - Technion\Semester 7\DL\Project\Mind-Cap\Mind-Cap\pretrains\pretrain_metafile.pth"
