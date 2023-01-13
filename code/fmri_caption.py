@@ -1,3 +1,4 @@
+#%%
 import sys
 sys.path.append(r"C:\Users\roeys\OneDrive - Technion\Semester 7\DL\Project\Mind-Cap\Mind-Cap\code\Mind_Vis_utils")
 
@@ -9,7 +10,7 @@ from torch.utils.data import DataLoader
 from transformers import GPT2Tokenizer, GPT2LMHeadModel
 from dataset import create_BOLD5000_dataset
 from Mind_Vis_utils.dc_ldm.ldm_for_fmri import create_model_from_config as mindvis_create_model_from_config
-
+#%%
 # Constants
 # TODO: Move constants to config file
 TOP_K = 1000
