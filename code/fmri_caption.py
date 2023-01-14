@@ -1,6 +1,6 @@
 #%%
 import sys
-sys.path.append(r"C:\Users\roeys\OneDrive - Technion\Semester 7\DL\Project\Mind-Cap\Mind-Cap\code\Mind_Vis_utils")
+sys.path.append(r'/home1/roeyshafran/BrainCap/Mind-Cap/code/Mind_Vis_utils/')
 
 import torch
 from torch import nn
@@ -82,7 +82,7 @@ class GPTCaptionModel(nn.Module):
             gpt_embedding = self.embedding_space_projection(prefix)
             gpt_embedding = gpt_embedding.view(-1, self.prefix_length, self.gpt_embedding_size)
 
-            tokens = torch.tensor([])
+            tokens = torch.tensor([[self.tokenizer.bos_token_id]])
             for i in range(MAX_CAPTION_LEN):
                 next_token, next_token_embed = self._gpt_next_token(gpt_embedding, device)
                 next_token, next_token_embed, tokens = next_token.to(device), next_token_embed.to(device), tokens.to(device)
@@ -154,8 +154,10 @@ def set_parameter_requires_grad(model, feature_extraction=True):
     model.requires_grad_(True)
 
 def main():
-    path_encoder = r"C:\Users\roeys\OneDrive - Technion\Semester 7\DL\Project\Mind-Cap\Mind-Cap\pretrains\pretrain_metafile.pth"
-    path_BOLD = r"C:\Users\roeys\OneDrive - Technion\Semester 7\DL\Project\Mind-Cap\Mind-Cap\data\BOLD5000\CSI1_dataset.pth"
+    path_encoder = r"/databases/roeyshafran/BrainCap/pretrains/pretrain_metafile.pth"
+    path_BOLD = r"/databases/roeyshafran/BrainCap/data/BOLD5000/CSI1_dataset.pth"
+
+    device = 'cuda:0'
 
     # create BOLD5000 dataset
     print("Loading BOLD5000 Dataset")
@@ -165,19 +167,20 @@ def main():
     train_dl = DataLoader(train, batch_size=5)
     s1 = iter(train_dl).next()
 
-    batch_fmri = s1['fmri']
+    batch_fmri = s1['fmri'].to(device)
     batch_caption = s1['caption']
 
 
 
     print("Creating Encoder")
-    encoder = create_fmri_encoder_from_pretrained(path_encoder, train.num_voxels)
+    encoder = create_fmri_encoder_from_pretrained(path_encoder, train.num_voxels).to(device)
     print("Creating Decoder")
-    decoder = GPTCaptionModel(encoder.num_patches, encoder.embed_dim, [encoder.embed_dim])
+    decoder = GPTCaptionModel(encoder.num_patches, encoder.embed_dim, [encoder.embed_dim]).to(device)
 
     encoded_fmri = encoder.forward(batch_fmri)
-    batch_tokens = decoder.tokenizer(batch_caption, return_tensors="pt", padding=True)
-    outputs = decoder.forward(batch_tokens['input_ids'], encoded_fmri, batch_tokens['attention_mask'])
+    #batch_tokens = decoder.tokenizer(batch_caption, return_tensors="pt", padding=True)
+    generated_text = decoder.generate_caption(encoded_fmri.to(device), device)
+    #outputs = decoder.forward(batch_tokens['input_ids'], encoded_fmri, batch_tokens['attention_mask'])
     pass
 if __name__ == "__main__":
     main()
