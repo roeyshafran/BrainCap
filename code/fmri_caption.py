@@ -39,7 +39,7 @@ class MLP(nn.Module):
 
 
 class GPTCaptionModel(nn.Module):
-    def __init__(self, prefix_length, prefix_size, projection_sizes):
+    def __init__(self, prefix_length, prefix_size, projection_sizes, act=nn.Tanh):
         super(GPTCaptionModel, self).__init__()
         self.prefix_length = prefix_length
         self.prefix_size = prefix_size
@@ -53,7 +53,7 @@ class GPTCaptionModel(nn.Module):
 
         assert projection_sizes[0] == self.prefix_size
         self.projection_sizes.append(self.gpt_embedding_size)
-        self.embedding_space_projection = MLP(self.projection_sizes, bias=True, act=nn.Tanh)
+        self.embedding_space_projection = MLP(self.projection_sizes, bias=True, act=act)
 
     # TODO: Check if attention_mask and/or labels parameters for GPT2LMHeadModel.forward are needed
     def forward(self, tokens, fmri_prefix, mask=None):
