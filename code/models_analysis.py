@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 checkpoints_path = r"/databases/roeyshafran/BrainCap/Checkpoints/"
 
 checkpoints_files = glob(os.path.join(checkpoints_path, '*.pth'))
-
+"""
 for checkpoint in checkpoints_files:
     model_dict = torch.load(checkpoint)
     print("-----------------")
@@ -20,15 +20,21 @@ for checkpoint in checkpoints_files:
     print(model_dict.keys())
     print("-----------------")
     del model_dict
+    """
 
 #%% plot training data
 
-batches_in_epoch = 10000/8
+batches_in_epoch = 2154//8
 
 for checkpoint in checkpoints_files[2:]:
     model_dict = torch.load(checkpoint)
     training_data = model_dict['training_data']
+    try:
+        comment = model_dict['comment']
+    except:
+        pass
     del model_dict
+    torch.cuda.empty_cache()
     running_loss = training_data['running_loss']
     running_semantic_accuracy = training_data['running_semantic_accuracy']
     val_accuracy = training_data['val_accuracy']
@@ -49,6 +55,7 @@ for checkpoint in checkpoints_files[2:]:
     axs[1].set_xlabel('Batch')
     axs[1].set_ylabel('Accuracy')
     axs[1].legend()
-    fig.suptitle(f"{os.path.basename(checkpoint)}")
+    fig.suptitle(f"{os.path.basename(checkpoint)}:\nComment: {}")
     fig.tight_layout()
 
+#%%
