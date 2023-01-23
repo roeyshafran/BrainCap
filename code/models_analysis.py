@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 checkpoints_path = r"/databases/roeyshafran/BrainCap/Checkpoints/"
 
 checkpoints_files = glob(os.path.join(checkpoints_path, '*.pth'))
+len(checkpoints_files)
 """
 for checkpoint in checkpoints_files:
     model_dict = torch.load(checkpoint)
@@ -25,14 +26,17 @@ for checkpoint in checkpoints_files:
 #%% plot training data
 
 batches_in_epoch = 2154//8
+#batches_in_epoch = 10000//8
 
-for checkpoint in checkpoints_files[2:]:
+for checkpoint in checkpoints_files[30:-1]:
     model_dict = torch.load(checkpoint)
     training_data = model_dict['training_data']
+    model_keys = model_dict.keys()
+    projection_sizes = model_dict['decoder_projection']['sizes']
     try:
         comment = model_dict['comment']
     except:
-        pass
+        comment = None
     del model_dict
     torch.cuda.empty_cache()
     running_loss = training_data['running_loss']
@@ -51,11 +55,14 @@ for checkpoint in checkpoints_files[2:]:
 
     axs[1].plot(batch_iterations, running_semantic_accuracy, label='Train')
     #axs[1].plot(batch_iterations[0:-1:int(np.ceil(len(running_loss)/10))], val_accuracy, '.', label='Validation')
-    axs[1].plot(val_iterations, val_accuracy, '.', label='Validation')
+    axs[1].plot(val_iterations, val_accuracy, '-o', label=('Validation', 'Validation - above 0.5'))
     axs[1].set_xlabel('Batch')
     axs[1].set_ylabel('Accuracy')
     axs[1].legend()
-    fig.suptitle(f"{os.path.basename(checkpoint)}:\nComment: {}")
+    fig.suptitle(f"{os.path.basename(checkpoint)}:\nComment: {comment} \nKeys: {model_keys}\n size: {projection_sizes}")
     fig.tight_layout()
 
 #%%
+print(checkpoints_files[2])
+model_dict = torch.load(checkpoints_files[2])
+print(model_dict['scheduler'])

@@ -37,9 +37,25 @@ class MLP(nn.Module):
     def forward(self, x):
         return self.model(x)
 
+class MLP_dropout(nn.Module):
+    def __init__(self, sizes, dropout=0.3, bias=True, act=nn.Tanh):
+        super(MLP_dropout, self).__init__()
+        layers = []
+        for i in range(len(sizes)-1):
+            layers.append(nn.Linear(sizes[i], sizes[i+1], bias=bias))
+            layers.append(nn.Dropout(p=dropout))
+            if i < len(sizes) - 2:
+                layers.append(act())
+        self.model = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.model(x)
+
+
+
 
 class GPTCaptionModel(nn.Module):
-    def __init__(self, prefix_length, prefix_size, projection_sizes, act=nn.Tanh):
+    def __init__(self, prefix_length, prefix_size, projection_sizes, act=nn.Tanh, use_dropout=False):
         super(GPTCaptionModel, self).__init__()
         self.prefix_length = prefix_length
         self.prefix_size = prefix_size
@@ -53,7 +69,10 @@ class GPTCaptionModel(nn.Module):
 
         assert projection_sizes[0] == self.prefix_size
         self.projection_sizes.append(self.gpt_embedding_size)
-        self.embedding_space_projection = MLP(self.projection_sizes, bias=True, act=act)
+        if use_dropout:
+            self.embedding_space_projection = MLP_dropout(self.projection_sizes, dropout=0.3, bias=True, act=act)    
+        else:
+            self.embedding_space_projection = MLP(self.projection_sizes, bias=True, act=act)
 
     # TODO: Check if attention_mask and/or labels parameters for GPT2LMHeadModel.forward are needed
     def forward(self, tokens, fmri_prefix, mask=None):
