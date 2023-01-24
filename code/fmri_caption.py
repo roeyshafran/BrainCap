@@ -172,6 +172,42 @@ def set_parameter_requires_grad(model, feature_extraction=True):
   else:
     model.requires_grad_(True)
 
+def remove_duplicates_from_dataset(dataloader, num_voxels, device):
+    prev_seen = {
+            'caption': np.array([]),
+            'image': torch.tensor([]).to(device),
+            'fmri': torch.tensor([]).to(device)
+        }
+    for batch in dataloader:
+        #batch['fmri'] = batch['fmri'].to(device)
+        #batch['image'] = batch['image'].to(device)
+        remove_duplicates_in_batch(batch) # in-place
+        remove_previously_seen_fmri(batch, prev_seen, device) # in-place
+        
+        try:
+            prev_seen['caption'] = np.concatenate((prev_seen['caption'], batch['caption']))
+        except:
+            prev_seen['caption'] = np.concatenate((prev_seen['caption'], [batch['caption']]))
+        prev_seen['image'] = torch.cat((prev_seen['image'], batch['image'].to(device)), dim=0)
+        prev_seen['fmri'] = torch.cat((prev_seen['fmri'], batch['fmri'].to(device)), dim=0)
+
+    #return [dict(zip(prev_seen,t)) for t in zip(*prev_seen.values())]
+    return BOLD5000_dataset(prev_seen['fmri'].cpu(), prev_seen['caption'].cpu(), prev_seen['image'].cpu(), identity, identity, num_voxels)
+
+def define_GPTCaption_model(encoder, trial=None, projection_sizes=None, use_dropout=False):
+    if trial:
+        # TODO: Add Optuna support. If trial is used, override projection_sizes with Optuna suggestion
+        num_layers = trial.suggest_int("num_projection_layers", 1, 5)
+        projection_sizes = [encoder.embed_dim]*num_layers
+    gpt_decoder = GPTCaptionModel(encoder.num_patches, encoder.embed_dim, projection_sizes, use_dropout=use_dropout)
+    set_parameter_requires_grad(gpt_decoder.embedding_space_projection, feature_extraction=False)
+    set_parameter_requires_grad(gpt_decoder.gpt, feature_extraction=True)
+    #set_parameter_requires_grad(gpt_decoder.tokenizer, feature_extraction=True)
+    #for param in gpt_decoder.tokenizer.parameters():
+    #  param.requires_grad = False
+
+    return gpt_decoder
+
 def main():
     path_encoder = r"/databases/roeyshafran/BrainCap/pretrains/pretrain_metafile.pth"
     path_BOLD = r"/databases/roeyshafran/BrainCap/data/BOLD5000/CSI1_dataset.pth"
