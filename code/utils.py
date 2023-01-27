@@ -1,5 +1,5 @@
 import sys
-sys.path.append(r'/home1/roeyshafran/BrainCap/Mind-Cap/code/Mind_Vis_utils/')
+sys.path.append(r'./Mind_Vis_utils/')
 
 from fmri_caption import GPTCaptionModel, create_fmri_encoder_from_pretrained,top_k_top_p_filtering, set_parameter_requires_grad
 from dataset import BOLD5000_dataset, identity
@@ -23,6 +23,18 @@ import os
 
 @torch.no_grad()
 def calculate_semantic_similarity(generated_caption, real_caption, device):
+    """Calculates semantic similarity between generated_caption and real_caption using the SBERT
+    all-mpnet-base-v2 model.
+
+    Args:
+        generated_caption (list of strings): 
+        real_caption (list of strings): 
+        device (string): device to use for calcualtions ('cuda:0' or 'cpu')
+
+    Returns:
+        torch.tensor: List of the cosine similarity between the each generated_caption sentence latent embedding and 
+        its corresponding sentence in real_caption
+    """
     sentence_model = SentenceTransformer('all-mpnet-base-v2').to(device)
     embed_generated = sentence_model.encode(generated_caption, convert_to_tensor=True)
     embed_real_caption = sentence_model.encode(real_caption, convert_to_tensor=True)
@@ -31,6 +43,19 @@ def calculate_semantic_similarity(generated_caption, real_caption, device):
 
 
 def evaluate_mindvis_to_clip(path, caption_prefix='Sample_', clip_caption_prefix='Sample_Clip_', device='cpu', return_k_best=5):
+    """This function calcaultes the semantic accruacy of the "MinD-Vis to CLIP" method - Generating images using MinD-Vis and captioning them
+    with ClipCap. 
+
+    Args:
+        path (str): path of the ClipCap outputed captions and real image captions
+        caption_prefix (str, optional): prefix of the real captions. Defaults to 'Sample_'.
+        clip_caption_prefix (str, optional): prefix for the generated captions using ClipCap. Defaults to 'Sample_Clip_'.
+        device (str, optional): device used for calculations. Defaults to 'cpu'.
+        return_k_best (int, optional): If not None, returns return_k_best captions that got the best accuracy. Defaults to 5.
+
+    Returns:
+        Returns the average accuracy and, if return_k_best not None, returns also the k best sentenes and their accuracy.
+    """
     num_of_files = len(glob(os.path.join(path, caption_prefix,'*.txt')))
     captions = []
     clip_captions = []
@@ -53,6 +78,14 @@ def evaluate_mindvis_to_clip(path, caption_prefix='Sample_', clip_caption_prefix
         return mean_accuracy
 
 def print_batch(batch, fontsize=5, num_of_columns=5, caption_as_title=False):
+    """This function get a batch records (a list of dict objects) and displays it.
+
+    Args:
+        batch (list of dict): Batch records
+        fontsize (int, optional): Defaults to 5.
+        num_of_columns (int, optional): Number of matplotlib subplit grid columns. Defaults to 5.
+        caption_as_title (bool, optional): If True, the caption of each sample is displayed as the image title. Defaults to False.
+    """
     N = int(np.ceil(np.sqrt(len(batch))))
     num_of_plots = len(batch)
     num_of_rows = num_of_plots // num_of_columns
@@ -80,10 +113,24 @@ def print_batch(batch, fontsize=5, num_of_columns=5, caption_as_title=False):
 
 @torch.no_grad()
 def calculate_accuracy_on_test(encoder, decoder, dataloader, device, threshhold=0.5, return_best_batch=False):
+    """
+    Args:
+        encoder (Mind_Vis_utils.sc_mbm.mae_for_fmri.fmri_encoder): fMRI encoder to use.
+        decoder (fmri_caption.GPTCaptionModel): decoder to use.
+        dataloader (torch.utils.data.DataLoader): DataLoader of set to calcualte accuracy on.
+        device (str): device to perform calculations on.
+        threshhold (float, optional): Threshold for success. If accuracy is higher then threshold than the caption is accurate. Defaults to 0.5.
+        return_best_batch (bool, optional): If True returns the best scoring batch. Defaults to False.
+
+    Returns:
+        _type_: _description_
+    """
     running_accuracy = 0
     above_threshhold_count = 0
     best_accuracy = 0
     for batch in dataloader:
+
+        # Encode fMRI and generate captions from it
         fmri_prefix = encoder.forward(batch['fmri'].to(device))
         generated_caption = decoder.generate_caption(fmri_prefix, device)
 
@@ -105,6 +152,16 @@ def calculate_accuracy_on_test(encoder, decoder, dataloader, device, threshhold=
         return accuracy
         
 def get_k_best(encoder, decoder, dataloader, k, device):
+    """This function is not used. find k best scoring samples in dataset.
+
+    Args:
+        encoder (Mind_Vis_utils.sc_mbm.mae_for_fmri.fmri_encoder): 
+        decoder (fmri_caption.GPTCaptionModel): 
+        dataloader (torch.utils.data.DataLoader):
+        k (int): Number of samples to return
+        device (str): 
+
+    """
     k_best = []
     for batch in dataloader:
         remove_duplicates_in_batch(batch) # in-place
@@ -120,6 +177,18 @@ def get_k_best(encoder, decoder, dataloader, k, device):
     return k_best
 
 def get_k_best_torch(encoder, decoder, dataloader, k, device):
+    """This function finds the k best scoring samples in the dataset.
+
+    Args:
+        encoder (Mind_Vis_utils.sc_mbm.mae_for_fmri.fmri_encoder): 
+        decoder (fmri_caption.GPTCaptionModel): 
+        dataloader (torch.utils.data.DataLoader):
+        k (int): Number of samples to return
+        device (str): 
+
+    Returns:
+        dict: Returns a batch of the best samples. keys: accuracy(torch.tensor), caption(numpy.ndarray), real_caption(numpy.ndarray), image(torch.tensor), fmri(torch.tensor)
+    """
     k_best = {
         'accuracy': torch.tensor([]).to(device),
         'caption': np.array([]),
@@ -136,13 +205,14 @@ def get_k_best_torch(encoder, decoder, dataloader, k, device):
         generated_caption = decoder.generate_caption(fmri_prefix, device)
         acc = calculate_semantic_similarity(generated_caption, batch['caption'], device)
 
+        # Concatenate current k best with new batch and find new k best among them
         k_best['accuracy'] = torch.cat((k_best['accuracy'], acc), dim=0)
         k_best['caption'] = np.concatenate((k_best['caption'], generated_caption))
         k_best['real_caption'] = np.concatenate((k_best['real_caption'], batch['caption']))
         k_best['image'] = torch.cat((k_best['image'], batch['image'].to(device)), dim=0)
         k_best['fmri'] = torch.cat((k_best['fmri'], batch['fmri'].to(device)), dim=0)
 
-        
+        # K can't be bigger than number of samples
         k_to_use = min(k_best['accuracy'].size(dim=0), k) 
         topk_values, topk_indices = torch.topk(k_best['accuracy'], k=k_to_use, dim=0) 
 
@@ -157,9 +227,14 @@ def get_k_best_torch(encoder, decoder, dataloader, k, device):
     return k_best
         
 
-        
-
 def remove_previously_seen_fmri(batch, k_best, device):
+    """This function gets a batch and previously seen samples (k_best samples) and removes samples that were seen before (same fmri but different caption)
+
+    Args:
+        batch (dict): batch recived from DataLoader
+        k_best (dict): previously seen samples
+        device (str): device to use for calcualtions
+    """
     # Works in-line
     #k_best_fmri = torch.tensor([]) if not k_best else torch.cat([torch.unsqueeze(s['fmri'], dim=0) for s in k_best], dim=0)
     #print(batch['fmri'].device)
@@ -174,6 +249,11 @@ def remove_previously_seen_fmri(batch, k_best, device):
 
 
 def remove_duplicates_in_batch(batch):
+    """This function get a batch and returns a new one without duplicated fmri scans. (Samples can have the same fmri scan with different caption) 
+
+    Args:
+        batch (dict):
+    """
     # Works in-place
     unique_fmri, idx = unique(batch['fmri'], dim=0)
     batch['fmri'] = unique_fmri
@@ -184,12 +264,23 @@ def remove_duplicates_in_batch(batch):
     
 
 def unique(x, dim=-1):
+    """Receives a tensor and returns its unique values and their indices.
+
+    Args:
+        x (torch.tensor):
+        dim (int, optional): dimension to determine uniqueness on. Defaults to -1.
+
+    Returns:
+        (torch.tensor, torch.tensor): (unique tensor, unique values indices)
+    """
     unique, inverse = torch.unique(x, return_inverse=True, dim=dim)
     perm = torch.arange(inverse.size(dim), dtype=inverse.dtype, device=inverse.device)
     inverse, perm = inverse.flip([dim]), perm.flip([dim])
     return unique, inverse.new_empty(unique.size(dim)).scatter_(dim, inverse, perm)
 
 def objective(encoder, decoder, train_dl, val_dl, device, trial=None):
+    """This function isn't used. objective function to use with optuna module for hyper-parameters optimization
+    """
 
     # Generate the optimizers
     if trial:
@@ -270,12 +361,31 @@ def objective(encoder, decoder, train_dl, val_dl, device, trial=None):
     return val_accuracy
 
 def state_dict_MLP_to_MLP_dropout(projection_state_dict, MLP_state_dict):
+    """This function translates MLP_state_dict key names to projection_state_dict key names.
+    This is used to load a checkpoint from a model without dropout layers to an identical model with dropout layers.
+
+    Args:
+        projection_state_dict (dict): 
+        MLP_state_dict (dict): 
+
+    Returns:
+        dict: new state dict with keys from projection_state_dict and values from MLP_state_dict
+    """
     new_keys = dict(zip(MLP_state_dict.keys(), projection_state_dict.keys()))
     new_sd = dict((new_keys[key], value) for (key, value) in MLP_state_dict.items())
 
     return new_sd
 
 def remove_duplicates_from_dataset(dataloader, device):
+    """Remove samples with duplicated fmri scans from BOLD5000_dataset
+
+    Args:
+        dataloader (torch.utils.data.DataLoader): DataLoader of a BOLD5000_dataset object.
+        device (str): 
+
+    Returns:
+        BOLD5000_dataset: unique dataset.
+    """
     prev_seen = {
             'caption': np.array([]),
             'image': torch.tensor([]).to(device),
@@ -289,7 +399,7 @@ def remove_duplicates_from_dataset(dataloader, device):
         
         try:
             prev_seen['caption'] = np.concatenate((prev_seen['caption'], batch['caption']))
-        except:
+        except: # Can reach here on last batch
             prev_seen['caption'] = np.concatenate((prev_seen['caption'], [batch['caption']]))
         prev_seen['image'] = torch.cat((prev_seen['image'], batch['image'].to(device)), dim=0)
         prev_seen['fmri'] = torch.cat((prev_seen['fmri'], batch['fmri'].to(device)), dim=0)

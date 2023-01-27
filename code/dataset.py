@@ -1,3 +1,15 @@
+"""
+This is the dataset.py file as implemented in the MinD-Vis paper (https://mind-vis.github.io/)
+with minor modifications to add captions to the datasets.
+
+Modified objects:
+    - spread_dataset
+    - create_BOLD5000_dataset
+    - BOLD5000_dataset
+
+"""
+
+
 from torch.utils.data import Dataset
 import numpy as np
 import os
@@ -453,6 +465,17 @@ def get_all_desc(coco_path, imagenet_path):
 
 
 def spread_dataset(fmri, images, captions):
+    """This function gets the scans, images and captions where each item in captions
+    is a list of captions for a specific scan and returns the same list such that each scan and image are duplicated 
+    as the number of available captions for the image.
+
+
+    Args:
+        fmri (iterable): all scans
+        images (iterable): all images
+        captions (list of lists): available captions for each image
+
+    """
     assert len(fmri) == len(images) and len(fmri) == len(captions)
 
     spreaded_fmri = []
@@ -471,6 +494,19 @@ def spread_dataset(fmri, images, captions):
 def create_BOLD5000_dataset(path='../data/BOLD5000', patch_size=16, fmri_transform=identity,
                             image_transform=identity, subjects=['CSI1', 'CSI2', 'CSI3', 'CSI4'],
                             include_nonavg_test=False):
+    """This function generates the train and test BOLD5000 datasets.
+
+    Args:
+        path (str, optional): Location of the BOLD5000 files. Defaults to '../data/BOLD5000'.
+        patch_size (int, optional): Length of each patch the fmri scans are divided to. Defaults to 16.
+        fmri_transform (_type_, optional): Transform to apply on the scans. Defaults to identity.
+        image_transform (_type_, optional): Transform to apply on the images. Defaults to identity.
+        subjects (list, optional): List of subjects to use their data in the datasets. Defaults to ['CSI1', 'CSI2', 'CSI3', 'CSI4'].
+        include_nonavg_test (bool, optional): Defaults to False.
+
+    Returns:
+        (BOLD5000_dataset, BOLD5000_dataset): Return a tuple with the train and test BOLD5000_dataset
+    """
     roi_list = ['EarlyVis', 'LOC', 'OPA', 'PPA', 'RSC']
     fmri_path = os.path.join(path, 'BOLD5000_GLMsingle_ROI_betas/py')
     cap_coco_path = os.path.join(path, r"COCO-captions\annotations")
@@ -567,6 +603,16 @@ def create_BOLD5000_dataset(path='../data/BOLD5000', patch_size=16, fmri_transfo
 
 class BOLD5000_dataset(Dataset):
     def __init__(self, fmri, caption, image, fmri_transform=identity, image_transform=identity, num_voxels=0):
+        """ Implementaion of the BOLD5000 pytorch dataset with support for fmri scans
+
+        Args:
+            fmri (numpy array or torch tensor): fmri list
+            caption (list of strings): list of captions 
+            image (numpy array or torch tensor): images to caption through the fmri
+            fmri_transform (functin, optional): Transform to apply in the fmri scans. Defaults to identity.
+            image_transform (function, optional): Transform to apply on the images. Defaults to identity.
+            num_voxels (int, optional): Number of voxels in each scan (length of each scan). Defaults to 0.
+        """
         self.fmri = fmri
         self.caption = caption
         self.image = image

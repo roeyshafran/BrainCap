@@ -1,6 +1,6 @@
 #%%
 import sys
-sys.path.append(r'/home1/roeyshafran/BrainCap/Mind-Cap/code/Mind_Vis_utils/')
+sys.path.append(r'./Mind_Vis_utils/')
 
 import torch
 from torch import nn
@@ -17,20 +17,24 @@ TOP_K = 1000
 TOP_P = 0.95
 MAX_CAPTION_LEN = 100
 
-"""
-Taken from the ClipCap paper implementation:
-- https://arxiv.org/abs/2111.09734
-- https://github.com/rmokady/CLIP_prefix_caption 
-"""
-
 
 class MLP(nn.Module):
     def __init__(self, sizes, bias=True, act=nn.Tanh):
+        """
+           Taken from the ClipCap paper implementation:
+               - https://arxiv.org/abs/2111.09734
+               - https://github.com/rmokady/CLIP_prefix_caption 
+            MLP mapping network
+        Args:
+            sizes (list): MLP layers sizes
+            bias (bool, optional): Defaults to True.
+            act (_type_, optional): Activation function to use. Defaults to nn.Tanh.
+        """
         super(MLP, self).__init__()
         layers = []
         for i in range(len(sizes)-1):
             layers.append(nn.Linear(sizes[i], sizes[i+1], bias=bias))
-            if i < len(sizes) - 2:
+            if i < len(sizes) - 2: # No activation on last layer
                 layers.append(act())
         self.model = nn.Sequential(*layers)
 
@@ -38,6 +42,8 @@ class MLP(nn.Module):
         return self.model(x)
 
 class MLP_dropout(nn.Module):
+    """An identical implementaion of MLP class with drop out layers.
+    """
     def __init__(self, sizes, dropout=0.3, bias=True, act=nn.Tanh):
         super(MLP_dropout, self).__init__()
         layers = []
@@ -52,10 +58,17 @@ class MLP_dropout(nn.Module):
         return self.model(x)
 
 
-
-
 class GPTCaptionModel(nn.Module):
     def __init__(self, prefix_length, prefix_size, projection_sizes, act=nn.Tanh, use_dropout=False):
+        """Implementation of the decoder class.
+
+        Args:
+            prefix_length (int): length of the fmri prefix. Equel to the numer of patches in the fMRI scan.
+            prefix_size (int): embedding dimension of the fmri encoder
+            projection_sizes (list): list of the MLP layers sizes
+            act (_type_, optional): Activation function. Defaults to nn.Tanh.
+            use_dropout (bool, optional): If True uses MLP_dropout and not the MLP class. Defaults to False.
+        """
         super(GPTCaptionModel, self).__init__()
         self.prefix_length = prefix_length
         self.prefix_size = prefix_size
@@ -74,20 +87,21 @@ class GPTCaptionModel(nn.Module):
         else:
             self.embedding_space_projection = MLP(self.projection_sizes, bias=True, act=act)
 
-    # TODO: Check if attention_mask and/or labels parameters for GPT2LMHeadModel.forward are needed
     def forward(self, tokens, fmri_prefix, mask=None):
         embedding_text = self.gpt.transformer.wte(tokens)
         #prefix_projections = self.embedding_space_projection(fmri_prefix).view(-1, self.prefix_length, self.gpt_embedding_size)
         prefix_projections = self.embedding_space_projection(fmri_prefix)
+        # concatenate the fmri prefix (fmri encoder output) and the real caption embedding to calcaulte the decoder output
         embedding_cat = torch.cat((prefix_projections, embedding_text), dim=1)
         mask_cat = torch.cat((torch.ones_like(prefix_projections[:, :, -1]), mask), dim=1)
         return self.gpt(inputs_embeds=embedding_cat, attention_mask=mask_cat)
 
-    # TODO: Check if attention_mask and/or labels parameters for GPT2LMHeadModel.forward are needed
     def _gpt_next_token(self, embedding, device):
+        # given an embedding (fmri prefix + work embeddings) estimate the next word in the sentences
         gpt_output = self.gpt(inputs_embeds=embedding)
         next_token_logits = gpt_output['logits'][:, -1, :]
-        # TODO: Add device argument
+
+        # Nucleus sampling of the next token
         filtered_p = top_k_top_p_filtering(next_token_logits, top_k=TOP_K, top_p=TOP_P, device=device)
         next_token = torch.multinomial(filtered_p, num_samples=1)
         next_token_embed = self.gpt.transformer.wte(next_token)
@@ -102,6 +116,7 @@ class GPTCaptionModel(nn.Module):
             gpt_embedding = gpt_embedding.view(-1, self.prefix_length, self.gpt_embedding_size)
 
             tokens = torch.tensor([[self.tokenizer.bos_token_id]])
+            # Estimate next token until maximal caption length is reached or a '.' token is reached.
             for i in range(MAX_CAPTION_LEN):
                 next_token, next_token_embed = self._gpt_next_token(gpt_embedding, device)
                 next_token, next_token_embed, tokens = next_token.to(device), next_token_embed.to(device), tokens.to(device)
@@ -127,9 +142,6 @@ class GPTCaptionModel(nn.Module):
         self.gpt.eval()
         return self
 
-
-
-#class
 
 # TODO: Check what is the best way to use torch.load map_location parameter
 def create_fmri_encoder_from_pretrained(path_pretrain_mbm_metafile, num_voxels, global_pool=False, feature_extraction=True):
