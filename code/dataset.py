@@ -466,6 +466,7 @@ def spread_dataset(fmri, images, captions):
 
     return np.array(spreaded_fmri), np.array(spreaded_images), np.array(spreaded_captions)
 
+
 # subjects=['CSI1', 'CSI2', 'CSI3', 'CSI4']
 def create_BOLD5000_dataset(path='../data/BOLD5000', patch_size=16, fmri_transform=identity,
                             image_transform=identity, subjects=['CSI1', 'CSI2', 'CSI3', 'CSI4'],

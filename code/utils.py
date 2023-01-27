@@ -275,3 +275,26 @@ def state_dict_MLP_to_MLP_dropout(projection_state_dict, MLP_state_dict):
 
     return new_sd
 
+def remove_duplicates_from_dataset(dataloader, device):
+    prev_seen = {
+            'caption': np.array([]),
+            'image': torch.tensor([]).to(device),
+            'fmri': torch.tensor([]).to(device)
+        }
+    for batch in dataloader:
+        #batch['fmri'] = batch['fmri'].to(device)
+        #batch['image'] = batch['image'].to(device)
+        remove_duplicates_in_batch(batch) # in-place
+        remove_previously_seen_fmri(batch, prev_seen, device) # in-place
+        
+        try:
+            prev_seen['caption'] = np.concatenate((prev_seen['caption'], batch['caption']))
+        except:
+            prev_seen['caption'] = np.concatenate((prev_seen['caption'], [batch['caption']]))
+        prev_seen['image'] = torch.cat((prev_seen['image'], batch['image'].to(device)), dim=0)
+        prev_seen['fmri'] = torch.cat((prev_seen['fmri'], batch['fmri'].to(device)), dim=0)
+
+    #return [dict(zip(prev_seen,t)) for t in zip(*prev_seen.values())]
+    return BOLD5000_dataset(prev_seen['fmri'].cpu(), prev_seen['caption'].cpu(), prev_seen['image'].cpu(), identity, identity, num_voxels)
+
+

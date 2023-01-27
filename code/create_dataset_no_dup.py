@@ -1,4 +1,5 @@
-from dataset import create_BOLD5000_dataset, identity, remove_duplicates_from_dataset
+from dataset import create_BOLD5000_dataset, identity
+from utils import  remove_duplicates_from_dataset
 import torch
 from torch.utils.data import DataLoader
 import argparse
@@ -12,8 +13,8 @@ def main(subjects=['CSI1'], batch_size=8, path_BOLD_dataset='../data/BOLD5000', 
     test_dl = DataLoader(test, batch_size=batch_size, shuffle=True)
     print("Loaded train and test sets")
     
-    train = remove_duplicates_from_dataset(train_dl)
-    test = remove_duplicates_from_dataset(test_dl)
+    train = remove_duplicates_from_dataset(train_dl, device)
+    test = remove_duplicates_from_dataset(test_dl, device)
     print("Removed duplicates")
 
     to_save = {'train': train, 'test': test}
@@ -23,9 +24,9 @@ def main(subjects=['CSI1'], batch_size=8, path_BOLD_dataset='../data/BOLD5000', 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-p1', '--path', type=str, required=True, help='path to the BOLD5000 folder')
-    parser.add_argument('-p2', '--save_path', type=str, required=True, help='location to save file')
+    parser.add_argument('-p2', '--save-path', type=str, required=True, help='location to save file')
     parser.add_argument('-s', '--subjects', type=str, nargs='+', help='List of subjects to use')
-    parser.add_argument('-b', '--batch_size', type=int, default=8, help='Batch size to use')
+    parser.add_argument('-b', '--batch-size', type=int, default=8, help='Batch size to use')
 
     args = parser.parse_args()
 
