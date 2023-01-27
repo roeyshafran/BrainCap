@@ -1,5 +1,5 @@
 # Brain-Cap Project
-.idea/
+.idea/*
 data/*
 !data/*.placeholder
 !data/Checkpoints/*.placeholder
