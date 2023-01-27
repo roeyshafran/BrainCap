@@ -56,7 +56,8 @@ The fMRI_encoder_pretrain_metafile.pth should be copied to the pretrains folder.
 
 ## Creating the Dataset
 - To speed up the training we use only one caption for each training sample and save the preprocessed dataset for faster loading.
-To create the dataset file only for the first subject (CSI1), as used for our training, please run from the code foler:
+- A script for creating the dataset file is provided.
+- For example, to create the dataset file only for the first subject (CSI1), as used for our training, please run the following line from the code folder:
   ```
   python create_dataset_no_dup.py --path ../data/BOLD5000 --save-path ../data/BOLD5000/CSI1_no_duplicates.pth --subjects CSI1 --batch_size 8
   ```
