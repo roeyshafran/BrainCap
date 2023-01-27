@@ -6,8 +6,8 @@ By Roey Shafran and Yoav Tsoran
 This repository is part of a final project in the Technion's course 046211 - Deep Learning
 
 # Overview
-Our goal in this project was to develop a model that generates a verbal description of images viewed by subjects, based on their fMRI scans (visual stimulation).
-We used the pretrained encoder from the [Mind-Vis](https://github.com/zjc062/mind-vis) article and trained an MLP network in the latent space that transfers the fMRI embedded to GPT2 embedded so that sentences are created at the output of the network.
+This project presents a proposed method for creating a descriptive text of the visual stimuli presented to a subject during an fMRI scan. The method is based on the combination of two previous works, MinD-Vis and ClipCap. [Mind-Vis](https://github.com/zjc062/mind-vis) is used to generate meaningful embeddings for fMRI scans, while [ClipCap](https://github.com/rmokady/CLIP_prefix_caption) is used to create an image embedding that is used as a prefix to GPT2 pre-trained language model. Our work builds upon these previous methods by using the ClipCap method in an fMRI-to-caption setup and training a simple mapping network between the MinD-Vis fMRI encoder embedding space and the GPT2 embedding space. This approach can help improve our understanding of the brain's visual system and explore potential technological applications.
+
 
 
 ![Overview](https://user-images.githubusercontent.com/121654746/215019036-d76a7851-c6f3-480c-ac81-8c0b1065c358.png)
