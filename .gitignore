@@ -1,5 +1,12 @@
 # Brain-Cap Project
-data/
+.idea/
+data/*
+!data/*.placeholder
+!data/Checkpoints/*.placeholder
+!data/BOLD5000/BOLD5000_GLMsingle_ROI_betas/*.placeholder
+!data/BOLD5000/BOLD5000_Stimuli/*.placeholder
+!data/BOLD5000/COCO-captions/*.placeholder
+!data/BOLD5000/ImageNet-captions/*.placeholder
 *.pth
 code/Mind_Vis_utils/dc_ldm/pretrains/
 
