@@ -1,7 +1,7 @@
 # Brain-Cap
 Generating Captions for Visual Stimuli Out of fMRI Scans
 
-By Roey Shafran and Yoav Tsoran
+By Yoav Tsoran and Roey Shafran 
 
 This repository is part of a final project in the Technion's course 046211 - Deep Learning
 
