@@ -76,12 +76,12 @@ To create the dataset file only for the first subject (CSI1), as used for our tr
 </p>
 
 
-## References
+## Results
 <p align="center">
   <img src="https://user-images.githubusercontent.com/121654746/215047584-731b1364-7aa1-48bc-ae7e-f3b881aa72ca.png" width="500">
 </p>
 
 
-## Credits:
+## References:
  -  Chen, Z., Qing, J., Xiang, T., Yue, W., & Zhou, J. (2022). Seeing Beyond the Brain: Masked Modeling Conditioned Diffusion Model for Human Vision Decoding. In arXiv.
  - Mokady, R., Hertz, A., & Bermano, A. (2021). Clipcap: Clip prefix for image captioning. arXiv preprint arXiv:2111.09734.
