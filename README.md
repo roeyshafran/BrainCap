@@ -51,7 +51,7 @@ data
 The MinD-Vis repository provides [download links](https://figshare.com/s/94cd778e6afafb00946e) for the fMRI-image datasets. The data.zip file needs to be extracted to this repository data folder as stated above. 
 The COCO dataset captions can be downloaded from the [COCO dataset official website](http://images.cocodataset.org/annotations/annotations_trainval2014.zip).
 The ImageNet dataset captions can be downloaded from the [mlfoundations/imagenet-captions](https://github.com/mlfoundations/imagenet-captions) GitHub reposiroty.
-We also provide a download for our Checkpoints, and the MinD-Vis pretrained encoder at ------link--------.
+We also provide a download for our [Checkpoints](https://figshare.com/articles/software/BrainCap_checkpoints_and_pretrains/21966860), and the MinD-Vis [pretrained encoder](https://figshare.com/articles/software/BrainCap_-_pretrained_fMRI_encoder_from_MinD-Vis/21967490).
 The fMRI_encoder_pretrain_metafile.pth should be copied to the pretrains folder.
 
 ## Creating the Dataset
@@ -60,7 +60,7 @@ To create the dataset file only for the first subject (CSI1), as used for our tr
   ```
   python create_dataset_no_dup.py --path ../data/BOLD5000 --save-path ../data/BOLD5000/CSI1_no_duplicates.pth --subjects CSI1 --batch_size 8
   ```
-- If you saved the BOLD5000 folder at a different location, want train the model on more subjects or use larger batch size for the preprocess look at the --help flag.
+- If you saved the BOLD5000 folder at a different location, want to train the model on more subjects or use larger batch size for the preprocess (might help with the script running speed) run the script with the --help flag.
 
 ## Training:
 - We trained a MLP architecture between the latent spaces while keeping the fMRI encoder and GPT2 decoder freezed.
